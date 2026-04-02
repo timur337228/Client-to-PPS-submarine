@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QTabWidget, QListWidget, QFrame, QSplitter, QComboBox)
 from PySide6.QtCore import Qt, QTimer, QRegularExpression
 from PySide6.QtGui import QFont
-
+import pyqtgraph as pg
 from network import UDPListener
 from highlighter import ScriptHighlighter
 from styles import STYLE_SHEET
@@ -35,7 +35,7 @@ class AuvControlStation(QMainWindow):
 
         # Настройка таймеров
         self.timer_auv_data = QTimer(self)
-        self.timer_auv_data.timeout.connect(self.get_auv_telemetry)
+        self.timer_auv_data.timeout.connect(self.get_auv_data)
         self.timer_auv_data.start(400)
         # self.get_auv_telemetry()
 
@@ -148,9 +148,21 @@ class AuvControlStation(QMainWindow):
         self.view_sonar.setObjectName("sensor_view")
         self.view_sonar.setAlignment(Qt.AlignCenter)
 
-        self.view_echo = QLabel("ECHO SOUNDER (1024 pts)")
-        self.view_echo.setObjectName("sensor_view")
-        self.view_echo.setAlignment(Qt.AlignCenter)
+        self.view_echo = pg.PlotWidget(title="MULTIBEAM ECHO SOUNDER")
+        self.view_echo.setBackground("#000000")
+        self.view_echo.showGrid(x=True, y=True, alpha=0.3)
+        self.view_echo.getPlotItem().invertY(True)
+
+        self.view_echo.setXRange(-50, 50, padding=0)
+        self.view_echo.setYRange(0, 50, padding=0)
+        self.view_echo.enableAutoRange(axis='xy', enable=False)
+
+        self.mbes_scatter = pg.ScatterPlotItem(
+            size=4,
+            pen=pg.mkPen(None),
+            brush=pg.mkBrush(0, 255, 100, 200)
+        )
+        self.view_echo.addItem(self.mbes_scatter)
 
         # Добавляем виджеты В СПЛИТТЕР, а не в лайаут
         self.sensor_splitter.addWidget(self.view_camera)
@@ -192,9 +204,10 @@ class AuvControlStation(QMainWindow):
 
 
 
-    def get_auv_telemetry(self):
+    def get_auv_data(self):
         try:
             self.udp_thread.send_command("get_telemetry", {"auv_id": self.auv_value})
+            self.udp_thread.send_command("get_mbes", {"auv_id": self.auv_value})
         except Exception as e:
             print(e)
 
@@ -254,27 +267,39 @@ class AuvControlStation(QMainWindow):
             self.lbl_status.setText("🔴 UDP ERROR")
             self.lbl_status.setStyleSheet("color: red;")
 
-
     def handle_response(self, response):
-        sent_values = response.get("values", {})
-        if sent_values.get("_from_script") or response.get("request") in ["set_motor_speed", "set_depth"]:
-            if self.script_commands_pending > 0:
-                self.script_commands_pending -= 1
-        if self.script_commands_pending > 0:
-            self.script_commands_pending -= 1
-            if self.script_commands_pending == 0:
-                self.log_message("✅ Mission Script Executed Successfully!")
+        if response.get("status") != 200:
+            self.handle_udp_error(response.get("message", "Unknown Error"))
+            return
+
+        result = response.get("result")
+        if not result:
+            return
+
+        # 1. Проверяем на наличие точек (MBES)
+        if "points_x" in result:
+            self.update_mbes_visualizer(result["points_x"], result["points_y"])
+
+        # 2. Проверяем на наличие телеметрии (есть поле depth или yaw)
+        elif "depth" in result:
+            self.update_telemetry(result)
+
+        # 3. Логика статуса подключения
         if not self.is_connected:
             self.is_connected = True
             self.lbl_status.setText("🟢 UDP CONNECTED")
-        if response[("status")] != 200:
-            self.handle_udp_error(response["message"])
-            return
-        if "result" in response:
-            if "status" not in response["result"] :
-                self.update_telemetry(response["result"])
-                return
-        self.log_message("Success command!")
+            self.lbl_status.setStyleSheet("color: #00FF00;")
+
+        # 4. Обработка команд скрипта
+        sent_values = response.get("values", {})
+        if sent_values.get("_from_script"):
+            if self.script_commands_pending > 0:
+                self.script_commands_pending -= 1
+                if self.script_commands_pending == 0:
+                    self.log_message("✅ Mission Script Executed Successfully!")
+
+    def update_mbes_visualizer(self, x_coords, y_coords):
+        self.mbes_scatter.setData(x=x_coords, y=y_coords)
 
 
     def closeEvent(self, event):

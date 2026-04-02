@@ -52,7 +52,7 @@ class UDPListener(QThread):
             payload = {"request": cmd, "values": dict(val), "request_id": request_id}
             self.command_sock.sendto(json.dumps(payload).encode('utf-8'), (self.ip, self.port))
 
-            data, _ = self.command_sock.recvfrom(4096)
+            data, _ = self.command_sock.recvfrom(65536)
             response = json.loads(data.decode('utf-8'))
 
             if "request" not in response:
