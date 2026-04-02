@@ -13,9 +13,13 @@ class ScriptHighlighter(QSyntaxHighlighter):
             "set_motor_speed",
             "get_auvs",
             "get_motor_ids",
-            "spawn_object",
-            "delete_object",
-            "get_telemetry",]
+            "get_telemetry",
+            "reset_auv",
+            "spawn_auv",
+            "get_side_sonar",
+            "get_camera",
+            "get_mbes",
+        ]
         for cmd in commands:
             pattern = QRegularExpression(rf"\b{cmd}\b")
             self.highlighting_rules.append((pattern, command_format))

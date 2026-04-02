@@ -21,7 +21,7 @@ class UDPListener(QThread):
         self.telemetry_sock.bind(("", 0))
 
         self.command_sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.command_sock.settimeout(1.0)
+        self.command_sock.settimeout(0.2)
 
         self.command_queue = Queue()
 

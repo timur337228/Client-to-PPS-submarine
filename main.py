@@ -248,10 +248,7 @@ class AuvControlStation(QMainWindow):
             print(e)
 
     def trigger_emergency(self):
-        self.log_message("⚠️ EMERGENCY SURFACE INITIATED!")
-        # Отправляем команду всплытия на все аппараты
-        for i in range(1, 4):
-            self.udp_thread.send_command("set_depth", {"auv_id": self.auv_value, "cor": 0.0})
+        self.udp_thread.send_command("reset_auv", {"auv_id": self.auv_value})
 
     def execute_script(self):
         try:
@@ -311,21 +308,22 @@ class AuvControlStation(QMainWindow):
         result = response.get("result")
         if not result:
             return
+        request = response.get("request")
         # 1. Проверяем на наличие точек (MBES)
         if "points_x" in result:
             self.update_mbes_visualizer(result["points_x"], result["points_y"])
-
         elif "camera_image" in result:
             self.update_camera_visualizer(result["camera_image"])
 
         elif "depth" in result:
             self.update_telemetry(result)
-        elif response.get("request") == "get_side_sonar":
+        elif request == "get_side_sonar":
 
             result = response.get("result", {})
             self.last_sonar_max_range = result.get("max_range", 200.0)
             self.update_sonar_visualizer(result.get("left", []), result.get("right", []))
-
+        elif request == "reset_auv":
+            self.log_message("success restart")
         # 3. Логика статуса подключения
         if not self.is_connected:
             self.is_connected = True
