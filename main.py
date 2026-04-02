@@ -1,6 +1,8 @@
 import sys
 import time
 import base64
+
+import numpy as np
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QLabel, QPushButton, QTextEdit,
                                QTabWidget, QListWidget, QFrame, QSplitter, QComboBox)
@@ -9,6 +11,7 @@ from PySide6.QtGui import QFont, QImage, QPixmap
 import pyqtgraph as pg
 from network import UDPListener
 from highlighter import ScriptHighlighter
+from sonar import SonarPanel
 from styles import STYLE_SHEET
 
 
@@ -146,9 +149,25 @@ class AuvControlStation(QMainWindow):
         self.view_camera.setObjectName("sensor_view")
         self.view_camera.setAlignment(Qt.AlignCenter)
 
-        self.view_sonar = QLabel("SIDESCAN SONAR")
-        self.view_sonar.setObjectName("sensor_view")
-        self.view_sonar.setAlignment(Qt.AlignCenter)
+        # 1. Создаем общую палитру
+        pos = np.array([0.0, 0.5, 1.0])
+        color = np.array([[0, 0, 0, 255], [180, 110, 50, 255], [255, 255, 200, 255]], dtype=np.ubyte)
+        cmap = pg.ColorMap(pos, color)
+        lut = cmap.getLookupTable()
+
+        # 2. Контейнер для двух окон сонара
+        sonar_container = QWidget()
+        sonar_h_layout = QHBoxLayout(sonar_container)
+        sonar_h_layout.setContentsMargins(0, 0, 0, 0)
+        sonar_h_layout.setSpacing(4)
+
+        # Левый сонар
+        self.sonar_panel_l = SonarPanel("LEFT SONAR", accent_color="#459FED", flip=True)
+        self.sonar_panel_r = SonarPanel("RIGHT SONAR", accent_color="#6BDBBF", flip=False)
+
+        sonar_h_layout.addWidget(self.sonar_panel_l)
+        sonar_h_layout.addWidget(self.sonar_panel_r)
+
 
         self.view_echo = pg.PlotWidget(title="MULTIBEAM ECHO SOUNDER")
         self.view_echo.setBackground("#000000")
@@ -169,9 +188,8 @@ class AuvControlStation(QMainWindow):
 
         # Добавляем виджеты В СПЛИТТЕР, а не в лайаут
         self.sensor_splitter.addWidget(self.view_camera)
-        self.sensor_splitter.addWidget(self.view_sonar)
+        self.sensor_splitter.addWidget(sonar_container)
         self.sensor_splitter.addWidget(self.view_echo)
-
 
         # Добавляем сам сплиттер в лайаут панели
         right_layout.addWidget(self.sensor_splitter)
@@ -225,6 +243,7 @@ class AuvControlStation(QMainWindow):
             self.udp_thread.send_command("get_telemetry", {"auv_id": self.auv_value})
             self.udp_thread.send_command("get_mbes", {"auv_id": self.auv_value})
             self.udp_thread.send_command("get_camera", {"auv_id": self.auv_value})
+            self.udp_thread.send_command("get_side_sonar", {"auv_id": self.auv_value})
         except Exception as e:
             print(e)
 
@@ -301,6 +320,11 @@ class AuvControlStation(QMainWindow):
 
         elif "depth" in result:
             self.update_telemetry(result)
+        elif response.get("request") == "get_side_sonar":
+
+            result = response.get("result", {})
+            self.last_sonar_max_range = result.get("max_range", 200.0)
+            self.update_sonar_visualizer(result.get("left", []), result.get("right", []))
 
         # 3. Логика статуса подключения
         if not self.is_connected:
@@ -322,6 +346,15 @@ class AuvControlStation(QMainWindow):
             self.view_echo.autoRange()
             self.first_mbes_scan = False
 
+    def update_sonar_visualizer(self, left_data: list, right_data: list):
+        try:
+            max_range = float(
+                self.last_sonar_max_range if hasattr(self, "last_sonar_max_range") else 200.0
+            )
+            self.sonar_panel_l.set_data(left_data, max_range)
+            self.sonar_panel_r.set_data(right_data, max_range)
+        except Exception as e:
+            self.log_message(f"Sonar update error: {e}")
 
     def closeEvent(self, event):
         self.timer_auv_data.stop()
