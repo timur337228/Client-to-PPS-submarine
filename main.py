@@ -16,6 +16,7 @@ class AuvControlStation(QMainWindow):
     def __init__(self):
         # Переменные
         self.auv_value = 0
+        self.first_mbes_scan = True
         self.is_connected = False
         self.script_commands_pending = 0
 
@@ -153,9 +154,10 @@ class AuvControlStation(QMainWindow):
         self.view_echo.setBackground("#000000")
         self.view_echo.showGrid(x=True, y=True, alpha=0.3)
         self.view_echo.getPlotItem().invertY(True)
+        self.view_echo.setAspectLocked(True)
 
-        self.view_echo.setXRange(-50, 50, padding=0)
-        self.view_echo.setYRange(0, 50, padding=0)
+        self.view_echo.setRange(xRange=[-20, 20], yRange=[0, 30], padding=0.1)
+        self.view_echo.getViewBox().setMouseEnabled(x=True, y=True)
         self.view_echo.enableAutoRange(axis='xy', enable=False)
 
         self.mbes_scatter = pg.ScatterPlotItem(
@@ -316,6 +318,9 @@ class AuvControlStation(QMainWindow):
 
     def update_mbes_visualizer(self, x_coords, y_coords):
         self.mbes_scatter.setData(x=x_coords, y=y_coords)
+        if self.first_mbes_scan and len(x_coords) > 0:
+            self.view_echo.autoRange()
+            self.first_mbes_scan = False
 
 
     def closeEvent(self, event):
