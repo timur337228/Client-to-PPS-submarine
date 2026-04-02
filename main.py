@@ -1,10 +1,11 @@
 import sys
 import time
+import base64
 from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QLabel, QPushButton, QTextEdit,
                                QTabWidget, QListWidget, QFrame, QSplitter, QComboBox)
 from PySide6.QtCore import Qt, QTimer, QRegularExpression
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QImage, QPixmap
 import pyqtgraph as pg
 from network import UDPListener
 from highlighter import ScriptHighlighter
@@ -202,12 +203,26 @@ class AuvControlStation(QMainWindow):
     def select_auv(self, value):
         self.auv_value = int(value) - 1
 
+    def update_camera_visualizer(self, base64_data):
+        try:
+            image_bytes = base64.b64decode(base64_data)
 
+            qimg = QImage.fromData(image_bytes)
+            pixmap = QPixmap.fromImage(qimg)
+
+            self.view_camera.setPixmap(pixmap.scaled(
+                self.view_camera.size(),
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation
+            ))
+        except Exception as e:
+            self.log_message(f"Camera decode error: {e}")
 
     def get_auv_data(self):
         try:
             self.udp_thread.send_command("get_telemetry", {"auv_id": self.auv_value})
             self.udp_thread.send_command("get_mbes", {"auv_id": self.auv_value})
+            self.udp_thread.send_command("get_camera", {"auv_id": self.auv_value})
         except Exception as e:
             print(e)
 
@@ -275,12 +290,13 @@ class AuvControlStation(QMainWindow):
         result = response.get("result")
         if not result:
             return
-
         # 1. Проверяем на наличие точек (MBES)
         if "points_x" in result:
             self.update_mbes_visualizer(result["points_x"], result["points_y"])
 
-        # 2. Проверяем на наличие телеметрии (есть поле depth или yaw)
+        elif "camera_image" in result:
+            self.update_camera_visualizer(result["camera_image"])
+
         elif "depth" in result:
             self.update_telemetry(result)
 
