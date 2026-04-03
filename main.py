@@ -110,18 +110,18 @@ class AuvControlStation(QMainWindow):
         self.lbl_roll.setFont(self.mono_font)
         self.lbl_speed = QLabel("SPEED: -- m/s")
         self.lbl_speed.setFont(self.mono_font)
-        self.lbl_x = QLabel("X: -- m")
-        self.lbl_x.setFont(self.mono_font)
-        self.lbl_y = QLabel("Y: -- m")
-        self.lbl_y.setFont(self.mono_font)
+        self.lbl_lati = QLabel("LATITUDE: -- m")
+        self.lbl_lati.setFont(self.mono_font)
+        self.lbl_long = QLabel("LONGITUDE: -- m")
+        self.lbl_long.setFont(self.mono_font)
 
         left_layout.addWidget(self.lbl_depth)
         left_layout.addWidget(self.lbl_yaw)
         left_layout.addWidget(self.lbl_pitch)
         left_layout.addWidget(self.lbl_roll)
         left_layout.addWidget(self.lbl_speed)
-        left_layout.addWidget(self.lbl_x)
-        left_layout.addWidget(self.lbl_y)
+        left_layout.addWidget(self.lbl_lati)
+        left_layout.addWidget(self.lbl_long)
         left_layout.addStretch()
         splitter.addWidget(left_panel)
 
@@ -277,8 +277,8 @@ class AuvControlStation(QMainWindow):
             self.lbl_pitch.setText(f"PITCH: {data.get('pitch', 0):.1f}°")
             self.lbl_roll.setText(f"ROLL: {data.get('roll', 0):.1f}°")
             self.lbl_speed.setText(f"SPEED: {data.get('speed', 0):.1f} m/s")
-            self.lbl_x.setText(f"X: {data.get('x', 0):.1f} m")
-            self.lbl_y.setText(f"Y: {data.get('y', 0):.1f} m")
+            self.lbl_lati.setText(f"LATITUDE: {data.get('latitude', 0):.6f}°")
+            self.lbl_long.setText(f"LONGITUDE: {data.get('longitude', 0):.6f}°")
         except Exception as e:
             return
 
