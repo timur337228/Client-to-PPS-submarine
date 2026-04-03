@@ -41,7 +41,7 @@ class AuvControlStation(QMainWindow):
         # Настройка таймеров
         self.timer_auv_data = QTimer(self)
         self.timer_auv_data.timeout.connect(self.get_auv_data)
-        self.timer_auv_data.start(400)
+        self.timer_auv_data.start(1000)
         # self.get_auv_telemetry()
 
         self.start_time = time.time()
