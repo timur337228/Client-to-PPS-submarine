@@ -37,12 +37,10 @@ class AuvControlStation(QMainWindow):
         self.udp_thread.command_response.connect(self.handle_response)
         self.udp_thread.error_occurred.connect(self.handle_udp_error)
         self.udp_thread.start()
+        self.udp_thread.telemetry_received.connect(self.update_telemetry)
 
         # Настройка таймеров
-        self.timer_auv_data = QTimer(self)
-        self.timer_auv_data.timeout.connect(self.get_auv_data)
-        self.timer_auv_data.start(1000)
-        # self.get_auv_telemetry()
+        self.udp_thread.telemetry_received.connect(self.route_stream_data)
 
         self.start_time = time.time()
         self.timer = QTimer(self)
@@ -238,15 +236,6 @@ class AuvControlStation(QMainWindow):
         except Exception as e:
             self.log_message(f"Camera decode error: {e}")
 
-    def get_auv_data(self):
-        try:
-            self.udp_thread.send_command("get_telemetry", {"auv_id": self.auv_value})
-            self.udp_thread.send_command("get_mbes", {"auv_id": self.auv_value})
-            self.udp_thread.send_command("get_camera", {"auv_id": self.auv_value})
-            self.udp_thread.send_command("get_side_sonar", {"auv_id": self.auv_value})
-        except Exception as e:
-            print(e)
-
     def trigger_emergency(self):
         self.udp_thread.send_command("reset_auv", {"auv_id": self.auv_value})
 
@@ -283,6 +272,8 @@ class AuvControlStation(QMainWindow):
 
     def update_telemetry(self, data):
         try:
+            if data.get("auv_id") != self.auv_value:
+                return
             self.lbl_depth.setText(f"DEPTH: {data.get('depth', 0):.2f} m")
             self.lbl_yaw.setText(f"HEADING: {data.get('yaw', 0):.1f}°")
             self.lbl_pitch.setText(f"PITCH: {data.get('pitch', 0):.1f}°")
@@ -315,8 +306,6 @@ class AuvControlStation(QMainWindow):
         elif "camera_image" in result:
             self.update_camera_visualizer(result["camera_image"])
 
-        elif "depth" in result:
-            self.update_telemetry(result)
         elif request == "get_side_sonar":
 
             result = response.get("result", {})
@@ -354,9 +343,31 @@ class AuvControlStation(QMainWindow):
         except Exception as e:
             self.log_message(f"Sonar update error: {e}")
 
+    def route_stream_data(self, data):
+        if data.get("auv_id") != self.auv_value:
+            return
+
+        msg_type = data.get("type")
+
+        if msg_type == "telemetry":
+            self.update_telemetry(data)
+
+        elif msg_type == "mbes":
+            self.update_mbes_visualizer(data.get("points_x", []), data.get("points_y", []))
+
+        elif msg_type == "camera":
+            self.update_camera_visualizer(data.get("camera_image", ""))
+
+        elif msg_type == "sonar":
+            self.last_sonar_max_range = data.get("max_range", 200.0)
+            self.update_sonar_visualizer(data.get("left", []), data.get("right", []))
+
     def closeEvent(self, event):
-        self.timer_auv_data.stop()
-        self.timer.stop()
+        # Останавливаем основной таймер часов
+        if hasattr(self, 'timer'):
+            self.timer.stop()
+
+        # Останавливаем сетевой поток
         self.udp_thread.stop()
         self.udp_thread.wait(1000)
         event.accept()
