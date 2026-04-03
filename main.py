@@ -1,3 +1,4 @@
+import os
 import sys
 import time
 import base64
@@ -7,8 +8,10 @@ from PySide6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                                QHBoxLayout, QLabel, QPushButton, QTextEdit,
                                QTabWidget, QListWidget, QFrame, QSplitter, QComboBox)
 from PySide6.QtCore import Qt, QTimer
-from PySide6.QtGui import QFont, QImage, QPixmap
+from PySide6.QtGui import QFont, QImage, QPixmap, QIcon
 import pyqtgraph as pg
+
+from docs import CommandsDocDialog
 from network import UDPListener
 from highlighter import ScriptHighlighter
 from sonar import SonarPanel
@@ -57,6 +60,16 @@ class AuvControlStation(QMainWindow):
         # --- А. ВЕРХНЯЯ ПАНЕЛЬ (Header) ---
         header_layout = QHBoxLayout()
 
+        icon_path = "dist/icon.png"  # или абсолютный путь
+
+        # Проверка существования файла
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+        else:
+            pixmap = QPixmap(32, 32)
+            pixmap.fill(Qt.blue)
+            self.setWindowIcon(QIcon(pixmap))
+
         # ✅ ВЕРХНИЙ ЛЕВЫЙ УГОЛ: Интерфейс выбора AUV
         auv_selector_layout = QHBoxLayout()
         self.auv_combo = QComboBox()
@@ -83,12 +96,17 @@ class AuvControlStation(QMainWindow):
         self.lbl_timer.setFont(self.mono_font)
         self.lbl_timer.setAlignment(Qt.AlignCenter)
 
+        self.btn_docs = QPushButton("📖 Commands")
+        self.btn_docs.setFixedWidth(110)
+        self.btn_docs.clicked.connect(self.open_command_docs)
+
         self.btn_emergency = QPushButton("EMERGENCY SURFACE")
         self.btn_emergency.setObjectName("btn_emergency")
         self.btn_emergency.clicked.connect(self.trigger_emergency)
 
         header_layout.addWidget(self.lbl_status)
         header_layout.addWidget(self.lbl_timer)
+        header_layout.addWidget(self.btn_docs)
         header_layout.addWidget(self.btn_emergency)
 
         # --- СРЕДНЯЯ ЗОНА (Разделитель на 3 колонки) ---
@@ -404,6 +422,10 @@ class AuvControlStation(QMainWindow):
                 self.auv_value = None
 
             self.auv_combo.blockSignals(False)
+
+    def open_command_docs(self):
+        dialog = CommandsDocDialog(self)
+        dialog.exec()
 
     def closeEvent(self, event):
         if hasattr(self, 'timer'):
