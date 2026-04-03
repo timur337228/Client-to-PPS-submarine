@@ -147,6 +147,26 @@ class AuvControlStation(QMainWindow):
         self.view_camera.setObjectName("sensor_view")
         self.view_camera.setAlignment(Qt.AlignCenter)
 
+        # В верхней панели (Header)
+        self.auv_combo = QComboBox()
+        self.auv_combo.setFixedWidth(80)
+        # При изменении выбора обновляем текущий ID в программе
+        self.auv_combo.currentTextChanged.connect(self.on_auv_changed)
+
+        self.btn_refresh_auvs = QPushButton("🔄")
+        self.btn_refresh_auvs.setFixedWidth(40)
+        self.btn_refresh_auvs.clicked.connect(self.refresh_auv_list)
+
+        self.btn_remove_auv = QPushButton("Delete")
+        self.btn_remove_auv.setObjectName("btn_remove")  # Можно добавить красный стиль в styles.py
+        self.btn_remove_auv.clicked.connect(self.remove_current_auv)
+
+        # Добавляем в layout (например, в top_layout)
+        header_layout.addWidget(QLabel("Target AUV:"))
+        header_layout.addWidget(self.auv_combo)
+        header_layout.addWidget(self.btn_refresh_auvs)
+        header_layout.addWidget(self.btn_remove_auv)
+
         # 1. Создаем общую палитру
         pos = np.array([0.0, 0.5, 1.0])
         color = np.array([[0, 0, 0, 255], [180, 110, 50, 255], [255, 255, 200, 255]], dtype=np.ubyte)
@@ -295,8 +315,26 @@ class AuvControlStation(QMainWindow):
         if response.get("status") != 200:
             self.handle_udp_error(response.get("message", "Unknown Error"))
             return
-
+        cmd = response.get("request")
         result = response.get("result")
+        if cmd == "get_auvs" and isinstance(result, list):
+            current_id = self.auv_combo.currentText()
+            self.auv_combo.blockSignals(True)
+            self.auv_combo.clear()
+
+            for auv_id in result:
+                self.auv_combo.addItem(str(auv_id))
+
+            # Пытаемся вернуть выделение на тот же ID, если он остался
+            index = self.auv_combo.findText(current_id)
+            if index >= 0:
+                self.auv_combo.setCurrentIndex(index)
+            elif self.auv_combo.count() > 0:
+                self.auv_combo.setCurrentIndex(0)
+                self.auv_value = int(self.auv_combo.currentText())
+
+            self.auv_combo.blockSignals(False)
+
         if not result:
             return
         request = response.get("request")
@@ -361,6 +399,25 @@ class AuvControlStation(QMainWindow):
         elif msg_type == "sonar":
             self.last_sonar_max_range = data.get("max_range", 200.0)
             self.update_sonar_visualizer(data.get("left", []), data.get("right", []))
+
+    def on_auv_changed(self, text):
+        if text:
+            self.auv_value = int(text)
+            self.log_message(f"Selected AUV ID: {self.auv_value}")
+
+    def refresh_auv_list(self):
+        """Запрос списка активных AUV с сервера"""
+        self.udp_thread.send_command("get_auvs", {})
+
+    def remove_current_auv(self):
+        """Удаление выбранного аппарата"""
+        if not self.auv_combo.currentText():
+            return
+
+        auv_id = int(self.auv_combo.currentText())
+        self.udp_thread.send_command("remove_auv", {"auv_id": auv_id})
+        # После удаления сразу запрашиваем обновленный список
+        QTimer.singleShot(500, self.refresh_auv_list)
 
     def closeEvent(self, event):
         # Останавливаем основной таймер часов

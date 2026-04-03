@@ -19,6 +19,7 @@ class ScriptHighlighter(QSyntaxHighlighter):
             "get_side_sonar",
             "get_camera",
             "get_mbes",
+            "remove_auv",
         ]
         for cmd in commands:
             pattern = QRegularExpression(rf"\b{cmd}\b")
